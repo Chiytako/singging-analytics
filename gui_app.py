@@ -4,10 +4,12 @@ tkinterを使用したデスクトップアプリケーション
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import threading
 import time
 import numpy as np
+from pathlib import Path
+from datetime import datetime
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
@@ -16,6 +18,8 @@ from src.audio_capture import AudioCapture, SystemAudioCapture
 from src.pitch_detection import PitchDetector
 from src.analyzer import PitchAnalyzer
 from src.config import Config
+from src.session import SessionRecorder, TimingAdjuster, KeyChanger
+from src.audio_utils import VolumeMonitor
 
 
 class SettingsWindow:
@@ -49,6 +53,11 @@ class SettingsWindow:
         analysis_frame = ttk.Frame(notebook)
         notebook.add(analysis_frame, text='分析')
         self._create_analysis_settings(analysis_frame)
+
+        # 高度な設定タブ
+        advanced_frame = ttk.Frame(notebook)
+        notebook.add(advanced_frame, text='高度な設定')
+        self._create_advanced_settings(advanced_frame)
 
         # ボタン
         button_frame = ttk.Frame(self.window)
@@ -323,6 +332,132 @@ class SettingsWindow:
             foreground='gray'
         ).pack(anchor='w', padx=30, pady=5)
 
+    def _create_advanced_settings(self, parent):
+        """高度な設定を作成"""
+        # タイミング調整
+        ttk.Label(parent, text='タイミング調整 (ミリ秒):').pack(anchor='w', padx=10, pady=(10, 0))
+        ttk.Label(
+            parent,
+            text='システムオーディオとマイク入力の同期オフセット',
+            foreground='gray',
+            font=('Arial', 9)
+        ).pack(anchor='w', padx=10)
+
+        self.timing_offset_var = tk.IntVar(
+            value=self.config.get('audio', 'timing_offset_ms', 0)
+        )
+
+        timing_frame = ttk.Frame(parent)
+        timing_frame.pack(fill='x', padx=30, pady=5)
+
+        timing_scale = ttk.Scale(
+            timing_frame,
+            from_=-1000,
+            to=1000,
+            variable=self.timing_offset_var,
+            orient='horizontal'
+        )
+        timing_scale.pack(side='left', fill='x', expand=True)
+
+        timing_label = ttk.Label(timing_frame, text='0 ms', width=10)
+        timing_label.pack(side='right', padx=5)
+
+        def update_timing_label(val):
+            ms = int(float(val))
+            timing_label.config(text=f'{ms:+d} ms')
+
+        timing_scale.config(command=update_timing_label)
+
+        ttk.Label(
+            parent,
+            text='正の値: システムオーディオを遅らせる / 負の値: マイクを遅らせる',
+            foreground='gray',
+            font=('Arial', 8)
+        ).pack(anchor='w', padx=30)
+
+        ttk.Separator(parent, orient='horizontal').pack(fill='x', padx=10, pady=10)
+
+        # キー変更
+        ttk.Label(parent, text='キー変更 (半音):').pack(anchor='w', padx=10, pady=(10, 0))
+        ttk.Label(
+            parent,
+            text='原曲のピッチを半音単位で変更（カラオケのキーコン機能）',
+            foreground='gray',
+            font=('Arial', 9)
+        ).pack(anchor='w', padx=10)
+
+        self.key_shift_var = tk.IntVar(
+            value=self.config.get('features', 'key_shift_semitones', 0)
+        )
+
+        key_frame = ttk.Frame(parent)
+        key_frame.pack(fill='x', padx=30, pady=5)
+
+        key_scale = ttk.Scale(
+            key_frame,
+            from_=-12,
+            to=12,
+            variable=self.key_shift_var,
+            orient='horizontal'
+        )
+        key_scale.pack(side='left', fill='x', expand=True)
+
+        key_label = ttk.Label(key_frame, text='0 (変更なし)', width=15)
+        key_label.pack(side='right', padx=5)
+
+        def update_key_label(val):
+            semitones = int(float(val))
+            if semitones == 0:
+                key_label.config(text='0 (変更なし)')
+            elif semitones > 0:
+                key_label.config(text=f'+{semitones} 半音高く')
+            else:
+                key_label.config(text=f'{semitones} 半音低く')
+
+        key_scale.config(command=update_key_label)
+
+        ttk.Separator(parent, orient='horizontal').pack(fill='x', padx=10, pady=10)
+
+        # 録音設定
+        ttk.Label(parent, text='録音設定:').pack(anchor='w', padx=10, pady=(10, 0))
+
+        self.enable_recording_var = tk.BooleanVar(
+            value=self.config.get('features', 'enable_recording', True)
+        )
+        ttk.Checkbutton(
+            parent,
+            text='セッション録音を有効化',
+            variable=self.enable_recording_var
+        ).pack(anchor='w', padx=30, pady=2)
+
+        self.auto_save_var = tk.BooleanVar(
+            value=self.config.get('features', 'auto_save_session', False)
+        )
+        ttk.Checkbutton(
+            parent,
+            text='セッション終了時に自動保存',
+            variable=self.auto_save_var
+        ).pack(anchor='w', padx=30, pady=2)
+
+        ttk.Label(parent, text='保存先ディレクトリ:').pack(anchor='w', padx=30, pady=(10, 0))
+
+        self.session_dir_var = tk.StringVar(
+            value=self.config.get('features', 'session_save_dir', str(Path.home() / 'karaoke_sessions'))
+        )
+
+        dir_frame = ttk.Frame(parent)
+        dir_frame.pack(fill='x', padx=30, pady=5)
+
+        ttk.Entry(dir_frame, textvariable=self.session_dir_var).pack(side='left', fill='x', expand=True)
+        ttk.Button(dir_frame, text='参照...', command=self._browse_session_dir).pack(side='right', padx=5)
+
+    def _browse_session_dir(self):
+        """保存先ディレクトリを選択"""
+        from tkinter import filedialog
+        directory = filedialog.askdirectory(initialdir=self.session_dir_var.get())
+        if directory:
+            self.session_dir_var.set(directory)
+
     def _save_settings(self):
         """設定を保存"""
         # オーディオ設定
@@ -357,6 +492,13 @@ class SettingsWindow:
         self.config.set('analysis', 'confidence_threshold', self.confidence_threshold_var.get())
         self.config.set('analysis', 'history_size', self.history_size_var.get())
         self.config.set('analysis', 'octave_warning_threshold', self.octave_warning_var.get())
+
+        # 高度な設定
+        self.config.set('audio', 'timing_offset_ms', self.timing_offset_var.get())
+        self.config.set('features', 'key_shift_semitones', self.key_shift_var.get())
+        self.config.set('features', 'enable_recording', self.enable_recording_var.get())
+        self.config.set('features', 'auto_save_session', self.auto_save_var.get())
+        self.config.set('features', 'session_save_dir', self.session_dir_var.get())
 
         # 保存
         self.config.save()

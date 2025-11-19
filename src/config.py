@@ -18,6 +18,7 @@ class Config:
             'mic_device': None,
             'system_device': None,
             'use_system_audio': False,
+            'timing_offset_ms': 0,  # タイミングオフセット（ミリ秒）
         },
         'display': {
             'mode': 'detailed',  # 'simple', 'detailed', 'professional'
@@ -25,12 +26,20 @@ class Config:
             'show_pitch_graph': True,
             'show_cents_gauge': True,
             'show_statistics': True,
+            'show_volume_meter': True,
             'update_interval': 100,  # ms
         },
         'analysis': {
             'confidence_threshold': 0.8,
             'history_size': 100,
             'octave_warning_threshold': 5,
+        },
+        'features': {
+            'enable_recording': True,
+            'enable_key_change': True,
+            'key_shift_semitones': 0,  # キー変更（半音）
+            'auto_save_session': False,
+            'session_save_dir': str(Path.home() / 'karaoke_sessions'),
         }
     }
 
