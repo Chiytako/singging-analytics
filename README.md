@@ -66,13 +66,56 @@ python main.py --system-audio
 
 # 利用可能なオーディオデバイスをリスト表示
 python main.py --list-devices
+
+# インタラクティブモードでデバイスを選択
+python main.py --interactive
+
+# 特定のデバイスIDを指定
+python main.py --mic-device 1 --system-audio --system-device 5
 ```
 
 #### オプション引数
 
 - `--system-audio`: システムオーディオ（PC内部音声）もキャプチャして原曲と比較
 - `--list-devices`: 利用可能なオーディオデバイス一覧を表示
+- `--interactive` / `-i`: インタラクティブモードでデバイスを選択
+- `--mic-device ID`: マイクデバイスIDを指定（`--list-devices`で確認可能）
+- `--system-device ID`: システムオーディオデバイスIDを指定
 - `--sample-rate RATE`: サンプリングレートを指定（デフォルト: 44100 Hz）
+
+#### デバイス選択の方法
+
+**1. デバイス一覧を確認**
+```bash
+python main.py --list-devices
+```
+
+出力例:
+```
+=== 利用可能なオーディオデバイス ===
+0: マイク配列 (Realtek High Definition Audio)
+   入力チャンネル数: 2
+   出力チャンネル数: 0
+   サンプリングレート: 44100.0
+
+1: ステレオミキサー (Realtek High Definition Audio)
+   入力チャンネル数: 2
+   出力チャンネル数: 0
+   サンプリングレート: 44100.0
+```
+
+**2. デバイスIDを指定して実行**
+```bash
+# マイクはデバイス0、システムオーディオはデバイス1を使用
+python main.py --mic-device 0 --system-audio --system-device 1
+```
+
+**3. インタラクティブモードで選択**
+```bash
+python main.py --interactive --system-audio
+```
+
+インタラクティブモードでは、起動時にデバイス一覧から選択できます。
 
 #### 表示される情報
 
@@ -110,9 +153,19 @@ python web_app.py
 # システムオーディオも使用
 python web_app.py --system-audio
 
+# デバイスIDを指定
+python web_app.py --mic-device 0 --system-audio --system-device 1
+
 # ポート番号を変更
 python web_app.py --port 8080
 ```
+
+#### Webモードのオプション
+
+- `--system-audio`: システムオーディオもキャプチャ
+- `--mic-device ID`: マイクデバイスIDを指定
+- `--system-device ID`: システムオーディオデバイスIDを指定
+- `--port PORT`: ポート番号（デフォルト: 5000）
 
 ブラウザで以下のURLにアクセス:
 - http://localhost:5000 （デフォルト）

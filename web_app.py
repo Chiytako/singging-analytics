@@ -33,15 +33,28 @@ latest_data = {
 class WebAnalyzer:
     """Web用アナライザー"""
 
-    def __init__(self, use_system_audio=False):
+    def __init__(self, use_system_audio=False, mic_device=None, system_device=None):
         self.sample_rate = 44100
         self.use_system_audio = use_system_audio
 
         # コンポーネントの初期化
-        self.mic_capture = AudioCapture(sample_rate=self.sample_rate, channels=1)
+        self.mic_capture = AudioCapture(
+            sample_rate=self.sample_rate,
+            channels=1,
+            device=mic_device
+        )
         self.system_capture = None
         if use_system_audio:
-            self.system_capture = SystemAudioCapture(sample_rate=self.sample_rate)
+            if system_device is not None:
+                # 手動でデバイスIDを指定
+                self.system_capture = AudioCapture(
+                    sample_rate=self.sample_rate,
+                    channels=2,
+                    device=system_device
+                )
+            else:
+                # 自動検出
+                self.system_capture = SystemAudioCapture(sample_rate=self.sample_rate)
 
         self.pitch_detector_mic = PitchDetector(sample_rate=self.sample_rate)
         self.pitch_detector_system = None
@@ -411,7 +424,7 @@ def stop_analysis():
     return jsonify({'status': 'stopped'})
 
 
-def run_web_app(use_system_audio=False, port=5000):
+def run_web_app(use_system_audio=False, port=5000, mic_device=None, system_device=None):
     """Webアプリを起動"""
     global analyzer_instance
 
@@ -421,7 +434,11 @@ def run_web_app(use_system_audio=False, port=5000):
     print(f"\nブラウザで http://localhost:{port} にアクセスしてください")
     print("Ctrl+C で終了します\n")
 
-    analyzer_instance = WebAnalyzer(use_system_audio=use_system_audio)
+    analyzer_instance = WebAnalyzer(
+        use_system_audio=use_system_audio,
+        mic_device=mic_device,
+        system_device=system_device
+    )
     analyzer_instance.start()
 
     try:
@@ -437,9 +454,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='カラオケピッチアナライザー - Webモード')
     parser.add_argument('--system-audio', action='store_true',
                        help='システムオーディオもキャプチャする')
+    parser.add_argument('--mic-device', type=int, default=None,
+                       help='マイクデバイスID')
+    parser.add_argument('--system-device', type=int, default=None,
+                       help='システムオーディオデバイスID')
     parser.add_argument('--port', type=int, default=5000,
                        help='ポート番号 (デフォルト: 5000)')
 
     args = parser.parse_args()
 
-    run_web_app(use_system_audio=args.system_audio, port=args.port)
+    run_web_app(
+        use_system_audio=args.system_audio,
+        port=args.port,
+        mic_device=args.mic_device,
+        system_device=args.system_device
+    )

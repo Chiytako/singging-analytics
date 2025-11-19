@@ -18,7 +18,9 @@ class KaraokePitchAnalyzer:
     def __init__(
         self,
         sample_rate: int = 44100,
-        use_system_audio: bool = False
+        use_system_audio: bool = False,
+        mic_device: int = None,
+        system_device: int = None
     ):
         """
         初期化
@@ -26,15 +28,30 @@ class KaraokePitchAnalyzer:
         Args:
             sample_rate: サンプリングレート
             use_system_audio: システムオーディオを使用するか
+            mic_device: マイクデバイスID
+            system_device: システムオーディオデバイスID
         """
         self.sample_rate = sample_rate
         self.use_system_audio = use_system_audio
 
         # コンポーネントの初期化
-        self.mic_capture = AudioCapture(sample_rate=sample_rate, channels=1)
+        self.mic_capture = AudioCapture(
+            sample_rate=sample_rate,
+            channels=1,
+            device=mic_device
+        )
         self.system_capture = None
         if use_system_audio:
-            self.system_capture = SystemAudioCapture(sample_rate=sample_rate)
+            if system_device is not None:
+                # 手動でデバイスIDを指定
+                self.system_capture = AudioCapture(
+                    sample_rate=sample_rate,
+                    channels=2,
+                    device=system_device
+                )
+            else:
+                # 自動検出
+                self.system_capture = SystemAudioCapture(sample_rate=sample_rate)
 
         self.pitch_detector_mic = PitchDetector(sample_rate=sample_rate)
         self.pitch_detector_system = None
@@ -170,6 +187,42 @@ class KaraokePitchAnalyzer:
         print("=" * 80 + "\n")
 
 
+def select_device_interactive():
+    """インタラクティブにデバイスを選択"""
+    import sounddevice as sd
+
+    devices = sd.query_devices()
+
+    print("\n" + "=" * 80)
+    print("利用可能なオーディオデバイス")
+    print("=" * 80)
+
+    input_devices = []
+    for i, device in enumerate(devices):
+        if device['max_input_channels'] > 0:
+            input_devices.append(i)
+            print(f"[{i}] {device['name']}")
+            print(f"    入力チャンネル数: {device['max_input_channels']}")
+            print(f"    サンプリングレート: {device['default_samplerate']} Hz")
+            print()
+
+    while True:
+        try:
+            choice = input("デバイスIDを入力してください (キャンセル: Enter): ").strip()
+            if not choice:
+                return None
+            device_id = int(choice)
+            if device_id in input_devices:
+                return device_id
+            else:
+                print("無効なデバイスIDです。入力可能なデバイスから選択してください。")
+        except ValueError:
+            print("数値を入力してください。")
+        except KeyboardInterrupt:
+            print("\nキャンセルしました。")
+            return None
+
+
 def main():
     """メイン関数"""
     parser = argparse.ArgumentParser(
@@ -179,6 +232,23 @@ def main():
         '--list-devices',
         action='store_true',
         help='利用可能なオーディオデバイスをリスト表示'
+    )
+    parser.add_argument(
+        '--interactive', '-i',
+        action='store_true',
+        help='インタラクティブモードでデバイスを選択'
+    )
+    parser.add_argument(
+        '--mic-device',
+        type=int,
+        default=None,
+        help='マイクデバイスID (--list-devicesで確認可能)'
+    )
+    parser.add_argument(
+        '--system-device',
+        type=int,
+        default=None,
+        help='システムオーディオデバイスID (--list-devicesで確認可能)'
     )
     parser.add_argument(
         '--system-audio',
@@ -200,10 +270,24 @@ def main():
         capture.list_devices()
         return
 
+    # インタラクティブモード
+    mic_device = args.mic_device
+    system_device = args.system_device
+
+    if args.interactive:
+        print("\n【マイクデバイスの選択】")
+        mic_device = select_device_interactive()
+
+        if args.system_audio:
+            print("\n【システムオーディオデバイスの選択】")
+            system_device = select_device_interactive()
+
     # メインプログラムを実行
     analyzer = KaraokePitchAnalyzer(
         sample_rate=args.sample_rate,
-        use_system_audio=args.system_audio
+        use_system_audio=args.system_audio,
+        mic_device=mic_device,
+        system_device=system_device
     )
     analyzer.run()
 
